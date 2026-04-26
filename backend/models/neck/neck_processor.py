@@ -6,8 +6,8 @@ import joblib
 import pandas as pd
 from collections import deque
 
-from neck_exercise.neck_rep_segmenter import RepBuffer
-from neck_exercise.angle_utils import calculate_angle
+from neck.neck_rep_segmenter import RepBuffer
+from neck.angle_utils import calculate_angle
 
 import time
 
