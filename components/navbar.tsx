@@ -50,10 +50,10 @@ export function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href={profile?.role === 'patient' ? '/patient' : profile?.role === 'doctor' ? '/doctor' : '/admin'} className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-teal-600 flex items-center justify-center text-white font-bold">
-              P
-            </div>
-            <span className="font-bold text-lg text-gray-900 hidden sm:inline">PhysioAssist</span>
+           <div className="w-8 h-8 rounded-lg overflow-hidden">
+  <img src="/logo.jpg" alt="Logo" className="w-full h-full object-cover" />
+</div>
+            <span className="font-bold text-lg text-gray-900 hidden sm:inline">PhysioCare</span>
           </Link>
 
           {/* Desktop Navigation */}

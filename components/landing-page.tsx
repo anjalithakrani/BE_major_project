@@ -9,7 +9,7 @@ export function LandingPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-teal-50">
       {/* Navigation */}
       <nav className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white bg-opacity-80 backdrop-blur">
-        <div className="text-2xl font-bold text-blue-600">PhysioAssist</div>
+        <div className="text-2xl font-bold text-blue-600">PhysioCare</div>
         <div className="flex gap-3 flex-wrap justify-end">
           <Link href="/auth/login/patient">
             <Button variant="outline" className="text-sm">Patient Login</Button>
@@ -77,7 +77,7 @@ export function LandingPage() {
       {/* Features Section */}
       <section className="px-6 py-20 bg-white">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-4xl font-bold text-center text-gray-900 mb-16">Why Choose PhysioAssist?</h2>
+          <h2 className="text-4xl font-bold text-center text-gray-900 mb-16">Why Choose PhysioCare?</h2>
           
           <div className="grid md:grid-cols-2 gap-8">
             {/* Feature 1 */}
@@ -164,7 +164,7 @@ export function LandingPage() {
       <section className="px-6 py-20 bg-gradient-to-r from-blue-600 to-teal-600">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-bold text-white mb-6">Ready to Start Your Recovery?</h2>
-          <p className="text-xl text-blue-100 mb-8">Join thousands of patients achieving their therapy goals with PhysioAssist.</p>
+          <p className="text-xl text-blue-100 mb-8">Join thousands of patients achieving their therapy goals with PhysioCare.</p>
           <div className="flex gap-4 justify-center flex-wrap">
             <Link href="/register">
               <Button size="lg" variant="secondary" className="gap-2">
@@ -182,14 +182,14 @@ export function LandingPage() {
       <footer className="px-6 py-12 border-t border-gray-200 bg-gray-50">
         <div className="max-w-5xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-center gap-8">
-            <div className="text-lg font-bold text-blue-600">PhysioAssist</div>
+            <div className="text-lg font-bold text-blue-600">PhysioCare</div>
             <div className="flex gap-8 text-sm text-gray-600">
               <a href="#" className="hover:text-blue-600">About</a>
               <a href="#" className="hover:text-blue-600">Privacy</a>
               <a href="#" className="hover:text-blue-600">Terms</a>
               <a href="#" className="hover:text-blue-600">Contact</a>
             </div>
-            <div className="text-sm text-gray-600">© 2024 PhysioAssist. All rights reserved.</div>
+            <div className="text-sm text-gray-600">© 2024 PhysioCare. All rights reserved.</div>
           </div>
         </div>
       </footer>
