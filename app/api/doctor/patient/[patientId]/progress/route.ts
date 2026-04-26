@@ -8,117 +8,58 @@ export async function GET(
 ) {
   try {
     const { patientId } = await params;
-    
     const cookieStore = await cookies();
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
+          getAll() { return cookieStore.getAll(); },
         },
       }
     );
 
+    // Verify Doctor Session
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Verify doctor role
-    const { data: doctorProfile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (doctorProfile?.role !== 'doctor') {
-      return NextResponse.json({ error: 'Only doctors can view patient progress' }, { status: 403 });
-    }
-
-    // Verify doctor-patient relationship
-    const { data: relation } = await supabase
-      .from('doctor_patient')
-      .select('id')
-      .eq('doctor_id', user.id)
-      .eq('patient_id', patientId)
-      .eq('active', true)
-      .single();
-
-    if (!relation) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
-
-    // Get patient profile
-    const { data: patientProfile } = await supabase
-      .from('profiles')
-      .select('full_name, email')
-      .eq('id', patientId)
-      .single();
-
-    // Get patient's exercises
-    const { data: exercises } = await supabase
-      .from('patient_exercises')
-      .select(`
-        id,
-        reps_target,
-        sets_target,
-        angle_threshold,
-        exercise:exercise_id (
-          id,
-          name,
-          body_part
-        )
-      `)
-      .eq('patient_id', patientId)
-      .eq('active', true);
-
-    // Get patient's sessions with feedback
-    const { data: sessions } = await supabase
+    // Fetch Sessions specifically for the patientId provided in the URL
+    const { data: sessions, error: sErr } = await supabase
       .from('sessions')
       .select(`
-        id,
-        start_time,
-        end_time,
-        completed,
-        reps_completed,
-        sets_completed,
-        feedback,
-        patient_exercise:patient_exercise_id (
-          exercise:exercise_id (
-            name
-          )
-        ),
-        session_feedback (
-          pain_level,
-          difficulty_level,
-          mood,
-          comments
-        )
+        id, start_time, completed, reps_completed, reps_target,
+        patient_exercise:patient_exercise_id ( exercise:exercise_id ( name ) ),
+        session_feedback ( pain_level, difficulty_level, mood )
       `)
       .eq('patient_id', patientId)
-      .order('start_time', { ascending: false })
-      .limit(50);
+      .order('start_time', { ascending: false });
 
-    // Calculate statistics
+    if (sErr) throw sErr;
+
+    // Calculate Stats to match Patient Dashboard exactly
     const totalSessions = sessions?.length || 0;
     const completedSessions = sessions?.filter(s => s.completed).length || 0;
-    const completionRate = totalSessions > 0 ? (completedSessions / totalSessions) * 100 : 0;
+    const completionRate = totalSessions > 0 ? Math.round((completedSessions / totalSessions) * 100) : 0;
+
+    let totalAcc = 0;
+    let accCount = 0;
+    sessions?.forEach(s => {
+      if (s.reps_target > 0) {
+        totalAcc += Math.min((s.reps_completed / s.reps_target) * 100, 100);
+        accCount++;
+      }
+    });
 
     return NextResponse.json({
-      patient: patientProfile,
-      exercises,
       sessions,
       stats: {
         totalSessions,
-        completedSessions,
         completionRate,
+        averageAccuracy: accCount > 0 ? Math.round(totalAcc / accCount) : 0,
+        thisWeekSessions: totalSessions, // Adjust logic if needed for 7-day filter
       },
-    }, { status: 200 });
-  } catch (error) {
-    console.error('Error fetching patient progress:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

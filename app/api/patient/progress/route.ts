@@ -22,7 +22,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify patient role
     const { data: patientProfile } = await supabase
       .from('profiles')
       .select('role')
@@ -33,16 +32,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Only patients can view their progress' }, { status: 403 });
     }
 
-    // Get all sessions with feedback and exercise details
+    // ✅ removed sets_completed — not in schema
     const { data: sessions, error: sessionsError } = await supabase
       .from('sessions')
       .select(`
         id,
         start_time,
         end_time,
+        duration_seconds,
         completed,
         reps_completed,
-        sets_completed,
+        reps_target,
+        label_counts,
         patient_exercise:patient_exercise_id (
           reps_target,
           sets_target,
@@ -64,40 +65,44 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: sessionsError.message }, { status: 400 });
     }
 
-    // Calculate statistics
     const totalSessions = sessions?.length || 0;
     const completedSessions = sessions?.filter(s => s.completed).length || 0;
-    const completionRate = totalSessions > 0 ? (completedSessions / totalSessions) * 100 : 0;
+    const completionRate = totalSessions > 0
+      ? Math.round((completedSessions / totalSessions) * 100)
+      : 0;
 
-    // Calculate average accuracy (reps/sets completed vs target)
+    // ✅ accuracy based only on reps — no sets_completed in schema
     let totalAccuracy = 0;
     let accuracyCount = 0;
     sessions?.forEach(session => {
-      if (session.patient_exercise) {
-        const repsAccuracy = (session.reps_completed / session.patient_exercise.reps_target) * 100;
-        const setsAccuracy = (session.sets_completed / session.patient_exercise.sets_target) * 100;
-        const sessionAccuracy = (repsAccuracy + setsAccuracy) / 2;
-        totalAccuracy += Math.min(sessionAccuracy, 100); // Cap at 100%
+      const target = session.patient_exercise?.reps_target || session.reps_target;
+      if (target && target > 0) {
+        const accuracy = (session.reps_completed / target) * 100;
+        totalAccuracy += Math.min(accuracy, 100);
         accuracyCount++;
       }
     });
-    const averageAccuracy = accuracyCount > 0 ? Math.round(totalAccuracy / accuracyCount) : 0;
+    const averageAccuracy = accuracyCount > 0
+      ? Math.round(totalAccuracy / accuracyCount)
+      : 0;
 
-    // Get this week's sessions
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
-    const thisWeekSessions = sessions?.filter(s => new Date(s.start_time) >= weekAgo).length || 0;
+    const thisWeekSessions = sessions?.filter(
+      s => new Date(s.start_time) >= weekAgo
+    ).length || 0;
 
     return NextResponse.json({
       sessions,
       stats: {
         totalSessions,
         completedSessions,
-        completionRate: Math.round(completionRate),
+        completionRate,
         averageAccuracy,
         thisWeekSessions,
       },
     }, { status: 200 });
+
   } catch (error) {
     console.error('Error fetching patient progress:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
