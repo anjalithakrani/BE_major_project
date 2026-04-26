@@ -82,10 +82,11 @@ export default function PatientDetailPage() {
         </div>
         <div className="flex gap-3">
           {/* Using the dynamically imported component */}
-          <PatientReportAction 
-            patientName={patient?.full_name || 'Patient'} 
-            stats={stats} 
-          />
+          <PatientReportAction
+  patientId={patient.id}
+  patientName={patient.full_name}
+  stats={stats}
+/>
           <Link href={`/doctor/patient/${id}/exercises`}>
             <Button className="bg-blue-600 hover:bg-blue-700">Assign Exercise</Button>
           </Link>
