@@ -1,3 +1,8 @@
+<<<<<<< Updated upstream
+=======
+"use client";
+
+>>>>>>> Stashed changes
 import ExerciseShell from "@/components/ExerciseShell";
 
 const FLASK = process.env.NEXT_PUBLIC_FLASK_URL ?? "http://localhost:5001";
@@ -5,11 +10,18 @@ const FLASK = process.env.NEXT_PUBLIC_FLASK_URL ?? "http://localhost:5001";
 export default function ArmsPage() {
   return (
     <ExerciseShell
+<<<<<<< Updated upstream
       title="ArmRaises"
       statusUrl={`${FLASK}/arms/status`}
       liveUrl={`${FLASK}/arms/live`}
       videoSrc="/videos/arms.mp4"
       videoStyle={{  objectPosition: "center 20%" ,width: "70%"}}
+=======
+      title="Arms"
+      statusUrl={`${FLASK}/arms/status`}
+      liveUrl={`${FLASK}/arms/live`}
+      videoSrc="/videos/arms.mp4"
+>>>>>>> Stashed changes
     />
   );
 }
