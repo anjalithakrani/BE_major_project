@@ -2,7 +2,7 @@ from flask import Flask, Response, jsonify, request
 import cv2
 from models.bicep.bicep_processor import process_bicep_frame, get_status
 from models.squat.squat_processor import process_squat_frame, get_status as squat_get_status
-from models.neck.neck_tracker import process_neck
+from models.neck.neck_processor import process_neck, get_status as neck_get_status
 from models.leg.leg_processor import process_leg_frame, get_status as leg_status
 from flask_cors import CORS
 from physio_agent import PhysioAgent
@@ -115,7 +115,7 @@ def neck_live():
             ret, frame = cap.read()
             if not ret:
                 continue
-            counters, feedback, overlay = process_neck(frame)
+            counters, feedback, overlay = process_neck_frame(frame)
             _, buffer = cv2.imencode(".jpg", overlay)
             yield (
                 b"--frame\r\n"
@@ -128,7 +128,7 @@ def neck_live():
 
 @app.route("/neck/status")
 def neck_status():
-    status = get_status()
+    status = neck_get_status()
     return jsonify({
         "counters":       status["counters"],
         "feedback":       status["feedback"],
