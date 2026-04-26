@@ -17,6 +17,7 @@ export interface ExerciseProps {
   sessionError?: string | null;
   updateLive?: (reps: number, labelCounts: Record<string, Record<string, number>>) => void;
   onRequestEnd?: () => void;
+  videoStyle?: React.CSSProperties;
 }
 
 const mapData = (data: Record<string, unknown>) => ({
@@ -36,6 +37,7 @@ const Exercise: React.FC<ExerciseProps> = ({
   sessionError,
   updateLive,
   onRequestEnd,
+  videoStyle,
 }) => {
   const [counters, setCounters] = useState<Record<string, number>>({});
   const [feedback, setFeedback] = useState<Record<string, string>>({});
@@ -233,6 +235,7 @@ const Exercise: React.FC<ExerciseProps> = ({
                 borderRadius: 10,
                 objectFit: "cover",
                 background: "#000",
+                  ...videoStyle
               }}
             />
           </div>

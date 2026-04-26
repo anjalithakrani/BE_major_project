@@ -9,6 +9,7 @@ export default function NeckPage() {
       statusUrl={`${FLASK}/neck/status`}
       liveUrl={`${FLASK}/neck/live`}
       videoSrc="/videos/neck.mp4"
+      videoStyle={{  objectPosition: "center 60%" }}
       
     />
   );

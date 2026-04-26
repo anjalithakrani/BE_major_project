@@ -32,6 +32,7 @@ const EXERCISE_ROUTES: Record<string, string> = {
   Squats: '/patient/exercises/squat',
   LegExtension: '/patient/exercises/leg',
   Neck: '/patient/exercises/neck',
+  ArmRaises : '/patient/exercises/arms',
 };
 
 const getExerciseRoute = (name: string, peId: string): string => {
