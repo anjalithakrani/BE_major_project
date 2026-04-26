@@ -25,26 +25,24 @@ export function useExerciseSession({ patientExerciseId, repsTarget }: UseExercis
 
   const latestReps = useRef<number>(0);
   const latestLabelCounts = useRef<Record<string, Record<string, number>>>({});
-
-  // Keep latest state in a ref so endSession always reads fresh values
-  // without needing state in its dependency array
   const stateRef = useRef(state);
+  const startedRef = useRef(false);
+
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
-
-  const startedRef = useRef(false);
 
   const getToken = async (): Promise<string | null> => {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token ?? null;
   };
 
-  // ── Start session on mount ─────────────────────────────────────────────
   useEffect(() => {
     if (!patientExerciseId) return;
     if (startedRef.current) return;
     startedRef.current = true;
+
+    console.log("🚀 Starting session for peId:", patientExerciseId);
 
     const startSession = async () => {
       try {
@@ -67,7 +65,6 @@ export function useExerciseSession({ patientExerciseId, repsTarget }: UseExercis
         });
 
         const data = await res.json();
-
         if (!res.ok) {
           setState((s) => ({ ...s, error: data.error }));
           return;
@@ -84,31 +81,21 @@ export function useExerciseSession({ patientExerciseId, repsTarget }: UseExercis
     startSession();
   }, [patientExerciseId]);
 
-  // ── Autosave every 10s ─────────────────────────────────────────────────
   useEffect(() => {
     if (!state.sessionId || !state.isSessionActive) return;
-
-    const interval = setInterval(() => {
-      saveProgress();
-    }, AUTOSAVE_INTERVAL);
-
+    const interval = setInterval(() => saveProgress(), AUTOSAVE_INTERVAL);
     return () => clearInterval(interval);
   }, [state.sessionId, state.isSessionActive]);
 
   const saveProgress = async () => {
     const { sessionId } = stateRef.current;
     if (!sessionId) return;
-
     try {
       const token = await getToken();
       if (!token) return;
-
       await fetch(`/api/patient/sessions/${sessionId}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           reps_completed: latestReps.current,
           label_counts: latestLabelCounts.current,
@@ -119,36 +106,23 @@ export function useExerciseSession({ patientExerciseId, repsTarget }: UseExercis
     }
   };
 
-  // ── Stable endSession via useCallback + stateRef ───────────────────────
-  // useCallback with empty deps so the reference never changes —
-  // stateRef.current always has the latest sessionId / isSessionActive
   const endSession = useCallback(async () => {
     const { sessionId, isSessionActive } = stateRef.current;
     console.log("endSession called | sessionId:", sessionId, "| isActive:", isSessionActive);
-
-    if (!sessionId || !isSessionActive) {
-      console.log("endSession: guard hit, returning early");
-      return;
-    }
+    if (!sessionId || !isSessionActive) return;
 
     try {
       const token = await getToken();
       if (!token) return;
-
       const res = await fetch(`/api/patient/sessions/${sessionId}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           reps_completed: latestReps.current,
           label_counts: latestLabelCounts.current,
         }),
       });
-
       console.log("endSession PUT status:", res.status);
-
       if (res.ok) {
         setState((s) => ({ ...s, isSessionActive: false }));
         console.log("✅ Session ended:", sessionId);
@@ -156,15 +130,15 @@ export function useExerciseSession({ patientExerciseId, repsTarget }: UseExercis
     } catch (err) {
       console.error("Failed to end session:", err);
     }
-  }, []); // stable reference — reads fresh state via stateRef
+  }, []);
 
-  const updateLive = (
+  const updateLive = useCallback((
     reps: number,
     labelCounts: Record<string, Record<string, number>>
   ) => {
     latestReps.current = reps;
     latestLabelCounts.current = labelCounts;
-  };
+  }, []);
 
   return { ...state, updateLive, endSession };
 }

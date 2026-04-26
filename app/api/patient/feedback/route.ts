@@ -1,23 +1,29 @@
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
+    // Read Bearer token from Authorization header
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const token = authHeader.replace('Bearer ', '');
+
+    // Create a Supabase client authenticated with the user's token
+    const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`,
           },
         },
       }
     );
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser(token);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -35,7 +41,6 @@ export async function POST(request: NextRequest) {
 
     const { sessionId, painLevel, difficultyLevel, mood, comments } = await request.json();
 
-    // Validate inputs
     if (!sessionId || painLevel === undefined || !difficultyLevel || !mood) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
@@ -52,7 +57,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Session not found or not authorized' }, { status: 403 });
     }
 
-    // Create feedback
+    // Upsert feedback (insert or update if duplicate)
     const { data: feedback, error: feedbackError } = await supabase
       .from('session_feedback')
       .insert([{
@@ -67,7 +72,6 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (feedbackError) {
-      // If feedback already exists, update it instead
       if (feedbackError.message.includes('duplicate')) {
         const { data: updatedFeedback, error: updateError } = await supabase
           .from('session_feedback')

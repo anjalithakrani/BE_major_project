@@ -84,8 +84,7 @@ DEFAULT_FEATURES = {
 # ==============================
 squat_count = 0
 state_sequence = []
-# FIX 2: last_state tracks the squat phase as "up" or "down"
-last_state = "up"   # start assuming standing position
+last_state = "up"
 
 counters = {"squat": 0}
 feedback = {"squat": ""}
@@ -93,10 +92,8 @@ model_feedback = {"squat": "none"}
 collecting = False
 squat_buffer = None
 
-# FIX 1: Use real knee joint angles (hip→knee→ankle) with sensible thresholds
-# Standing: ~170°, Mid squat: ~120°, Deep squat: ~90° or lower
-SQUAT_DOWN_THRESH  = 120   # below this → person is squatting down
-SQUAT_UP_THRESH    = 155   # above this → person is back up (standing)
+SQUAT_DOWN_THRESH  = 120
+SQUAT_UP_THRESH    = 155
 
 min_confidence = 0.2
 
@@ -160,6 +157,37 @@ def summarize_with_estimates(buffer_obj):
     return features
 
 # ==============================
+# Manual override: rule-based squat quality check
+# Uses the lowest knee angle reached during the rep (peak depth)
+# and knee range of motion — both reliable depth indicators.
+#
+# Thresholds (tune these to your camera/subject):
+#   correct      → knee bent to ≤ 105° at bottom  AND  range ≥ 55°
+#   shallow_depth → anything else
+# ==============================
+def rule_based_squat_feedback(features: dict) -> str:
+    r_knee_avg   = features.get("r_knee_avg",   150)
+    l_knee_avg   = features.get("l_knee_avg",   150)
+    r_knee_range = features.get("r_knee_range",  0)
+    l_knee_range = features.get("l_knee_range",  0)
+
+    avg_knee     = (r_knee_avg   + l_knee_avg)   / 2
+    avg_range    = (r_knee_range + l_knee_range) / 2
+
+    # avg of the average angles — lower = deeper squat
+    # A good squat bends the knee well below 120° at the bottom
+    # r/l_knee_avg is the mean angle across the rep, so bottom will
+    # pull it noticeably below standing (~170°).
+    # Tune DEPTH_THRESHOLD and RANGE_THRESHOLD to match your data.
+    DEPTH_THRESHOLD = 130   # avg knee angle across rep; lower = deeper
+    RANGE_THRESHOLD = 50    # degrees of motion; higher = bigger movement
+
+    if avg_knee <= DEPTH_THRESHOLD and avg_range >= RANGE_THRESHOLD:
+        return "correct"
+    else:
+        return "shallow_depth"
+
+# ==============================
 # Analyze rep buffer
 # ==============================
 def analyze_rep_buffer(buffer_obj):
@@ -167,15 +195,13 @@ def analyze_rep_buffer(buffer_obj):
         return "buffer_empty"
     try:
         features = summarize_with_estimates(buffer_obj)
-        rep_df = pd.DataFrame([features])
-        for col in FEATURE_ORDER:
-            if col not in rep_df.columns:
-                rep_df[col] = DEFAULT_FEATURES.get(col, 0)
-        if model is None or le is None:
-            return "model_unavailable"
-        X = rep_df[FEATURE_ORDER].values
-        pred = model.predict(X)
-        return le.inverse_transform(pred)[0]
+
+        # --- Manual override: ignore the SVM, use biomechanical rules ---
+        result = rule_based_squat_feedback(features)
+        print(f"[analyze_rep_buffer] features → knee_avg=({features.get('r_knee_avg'):.1f}, {features.get('l_knee_avg'):.1f})  "
+              f"knee_range=({features.get('r_knee_range'):.1f}, {features.get('l_knee_range'):.1f})  → {result}")
+        return result
+
     except Exception as e:
         print(f"[analyze_rep_buffer] Error: {e}")
         return "error"
@@ -191,9 +217,6 @@ def process_squat_frame(frame):
     keypoints, w, h = run_movenet(frame)
     overlay = frame.copy()
 
-    # FIX 1: Use both sides and average for robustness
-    # Left side: hip(11) → knee(13) → ankle(15)
-    # Right side: hip(12) → knee(14) → ankle(16)
     l_hip    = get_point(keypoints, 11, w, h)
     l_knee   = get_point(keypoints, 13, w, h)
     l_ankle  = get_point(keypoints, 15, w, h)
@@ -205,7 +228,6 @@ def process_squat_frame(frame):
     l_conf = min(keypoints[11][2], keypoints[13][2], keypoints[15][2])
     r_conf = min(keypoints[12][2], keypoints[14][2], keypoints[16][2])
 
-    # Use whichever side has better confidence; average if both good
     if l_conf > min_confidence and r_conf > min_confidence:
         l_knee_angle = calculate_angle(l_hip, l_knee, l_ankle)
         r_knee_angle = calculate_angle(r_hip, r_knee, r_ankle)
@@ -215,45 +237,30 @@ def process_squat_frame(frame):
     elif r_conf > min_confidence:
         knee_angle = calculate_angle(r_hip, r_knee, r_ankle)
     else:
-        knee_angle = None  # can't determine pose
+        knee_angle = None
 
     feedback_list = []
 
     if knee_angle is not None:
-        feedback_list.append(f"Knee angle: {int(knee_angle)}°")
-
-        # ==============================
-        # FIX 1+2: Simple two-state machine with hysteresis
-        # last_state: "up" (standing) or "down" (squatting)
-        # ==============================
-
         if last_state == "up" and knee_angle < SQUAT_DOWN_THRESH:
-            # Transition: standing → squatting — start collecting
             last_state = "down"
             collecting = True
             squat_buffer = RepBuffer()
             state_sequence = ["down"]
-            feedback_list.append("⬇ Going down...")
 
         elif last_state == "down" and knee_angle > SQUAT_UP_THRESH:
-            # Transition: squatting → standing — rep complete
             last_state = "up"
             squat_count += 1
             counters["squat"] = squat_count
-            feedback_list.append(f"✅ Rep {squat_count} counted!")
 
             if squat_buffer is not None:
                 rep_fb = analyze_rep_buffer(squat_buffer)
                 model_feedback["squat"] = rep_fb
-                feedback_list.append(f"🤖 {rep_fb}")
+                feedback_list.append(rep_fb)
 
-            # FIX 2: Reset everything so next rep can start cleanly
             collecting = False
             squat_buffer = None
             state_sequence = []
-
-    else:
-        feedback_list.append("⚠ Pose not detected")
 
     feedback["squat"] = " | ".join(feedback_list)
 
@@ -277,20 +284,10 @@ def process_squat_frame(frame):
                                l_sh, l_el, l_wr, l_hp,
                                nose)
 
-    # Overlay knee angle on frame
-    if knee_angle is not None:
-        cv2.putText(overlay, f"Knee: {int(knee_angle)}", (30, 50),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 0), 2)
-        cv2.putText(overlay, f"State: {last_state}", (30, 90),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-        cv2.putText(overlay, f"Reps: {squat_count}", (30, 130),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
-
-    # Draw skeleton
+    # Draw skeleton only — no text overlays
     draw_connections(overlay, keypoints, EDGES, threshold=0.4)
     draw_keypoints(overlay, keypoints, threshold=0.4)
 
-    # FIX 3: Return feedback (human-readable), not model_feedback
     return counters.copy(), feedback.copy(), overlay
 
 # ==============================

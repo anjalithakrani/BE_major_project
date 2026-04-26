@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import SessionTimer from "./SessionTimer";
 import useSpeechFeedback from "./useSpeechFeedback";
-import { useExerciseSession } from "@/hooks/useExerciseSession";
 
 export interface ExerciseProps {
   title: string;
@@ -13,7 +12,6 @@ export interface ExerciseProps {
   liveUrl: string;
   videoSrc: string;
   repsTarget?: number;
-  // Optional — provided by ExerciseShell so the shell owns session state
   sessionId?: string | null;
   isSessionActive?: boolean;
   sessionError?: string | null;
@@ -33,15 +31,12 @@ const Exercise: React.FC<ExerciseProps> = ({
   liveUrl,
   videoSrc,
   repsTarget = 10,
-  sessionId: sessionIdProp,
-  isSessionActive: isSessionActiveProp,
-  sessionError: sessionErrorProp,
-  updateLive: updateLiveProp,
+  sessionId,
+  isSessionActive,
+  sessionError,
+  updateLive,
   onRequestEnd,
 }) => {
-  const searchParams = useSearchParams();
-  const patientExerciseId = searchParams.get("peId");
-
   const [counters, setCounters] = useState<Record<string, number>>({});
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [modelFeedback, setModelFeedback] = useState<Record<string, string>>({});
@@ -52,13 +47,8 @@ const Exercise: React.FC<ExerciseProps> = ({
 
   const { audioEnabled, enableAudio } = useSpeechFeedback(counters, feedback, modelFeedback);
 
-  // If shell props provided, use them — otherwise fall back to internal hook
-  const internal = useExerciseSession({ patientExerciseId, repsTarget });
-  const sessionId      = sessionIdProp      ?? internal.sessionId;
-  const isSessionActive = isSessionActiveProp ?? internal.isSessionActive;
-  const sessionError   = sessionErrorProp   ?? internal.error;
-  const updateLive     = updateLiveProp     ?? internal.updateLive;
-  const endSession     = onRequestEnd       ?? internal.endSession;
+  const endSession = onRequestEnd ?? (() => {});
+  const update = updateLive ?? (() => {});
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -90,14 +80,14 @@ const Exercise: React.FC<ExerciseProps> = ({
         setModelFeedback(mapped.model_feedback);
         setLabelCounts(newLabelCounts);
         prevCountersRef.current = { ...mapped.counters };
-        updateLive(totalReps, newLabelCounts);
+        update(totalReps, newLabelCounts);
       } catch (err) {
         console.error(`Error fetching ${title} status:`, err);
       }
     }, 500);
 
     return () => clearInterval(interval);
-  }, [statusUrl, title, updateLive]);
+  }, [statusUrl, title, update]);
 
   useEffect(() => {
     const handleUnload = () => { endSession(); };
@@ -157,7 +147,6 @@ const Exercise: React.FC<ExerciseProps> = ({
           </span>
         )}
 
-        {/* End Session — header, top right */}
         {isSessionActive && (
           <button
             onClick={endSession}
